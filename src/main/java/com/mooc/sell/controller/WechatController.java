@@ -1,0 +1,91 @@
+package com.mooc.sell.controller;
+
+import com.mooc.sell.config.ProjectUrlConfig;
+import com.mooc.sell.enums.ResultEnum;
+import com.mooc.sell.exception.SellException;
+import lombok.extern.slf4j.Slf4j;
+import me.chanjar.weixin.common.api.WxConsts;
+import me.chanjar.weixin.common.bean.oauth2.WxOAuth2AccessToken;
+import me.chanjar.weixin.common.error.WxErrorException;
+import me.chanjar.weixin.mp.api.WxMpService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
+/**
+ * @version 1.0
+ * @author: liupurui
+ * @create: 2021−09-02-9:36
+ * @className: com.mooc.sell.controller.WechatController
+ * @description: TODO
+ */
+@Controller
+@RequestMapping("/wechat")
+@Slf4j
+public class WechatController {
+
+    @Autowired
+    private WxMpService wxMpService;
+
+    @Autowired
+    private WxMpService wxOpenService;
+
+    @Autowired
+    private ProjectUrlConfig projectUrlConfig;
+
+    @GetMapping("/authorize")
+    public String authorize(@RequestParam("returnUrl") String returnUrl) throws UnsupportedEncodingException {
+        //1. 配置
+        //2. 调用方法
+        //String url = "http://sellerebus.natapp1.cc/sell/wechat/userInfo";
+        String url = projectUrlConfig.getWechatMpAuthorize() + "/sell/wechat/userInfo";
+        String redirectUrl = wxMpService.getOAuth2Service().buildAuthorizationUrl(url, WxConsts.OAuth2Scope.SNSAPI_BASE, URLEncoder.encode(returnUrl, StandardCharsets.UTF_8));
+        return "redirect:" + redirectUrl;
+    }
+
+    @GetMapping("/userInfo")
+    public String userInfo(@RequestParam("code") String code,
+                           @RequestParam("state") String returnUrl) {
+        WxOAuth2AccessToken wxMpOAuth2AccessToken = new WxOAuth2AccessToken();
+        try {
+            wxMpOAuth2AccessToken = wxMpService.getOAuth2Service().getAccessToken(code);
+        } catch (WxErrorException e) {
+            log.error("【微信网页授权】{}", e);
+            throw new SellException(ResultEnum.WECHAT_MP_ERROR.getCode(), e.getError().getErrorMsg());
+        }
+
+        String openId = wxMpOAuth2AccessToken.getOpenId();
+
+        return "redirect:" + returnUrl + "?openid=" + openId;
+    }
+
+    @GetMapping("/qrAuthorize")
+    public String qrAuthorize(@RequestParam("returnUrl") String returnUrl) {
+        String url = projectUrlConfig.getWechatOpenAuthorize() + "/sell/wechat/qrUserInfo";
+        //String url = "http://sellerebus.natapp1.cc/sell/wechat/qrUserInfo";
+        String redirectUrl = wxOpenService.buildQrConnectUrl(url, WxConsts.QrConnectScope.SNSAPI_LOGIN, URLEncoder.encode(returnUrl,StandardCharsets.UTF_8));
+        return "redirect:" + redirectUrl;
+    }
+
+    @GetMapping("/qrUserInfo")
+    public String qrUserInfo(@RequestParam("code") String code,
+                             @RequestParam("state") String returnUrl) {
+        WxOAuth2AccessToken wxMpOAuth2AccessToken = new WxOAuth2AccessToken();
+        try {
+            wxMpOAuth2AccessToken = wxOpenService.getOAuth2Service().getAccessToken(code);
+        } catch (WxErrorException e) {
+            log.error("【微信网页授权】{}", e);
+            throw new SellException(ResultEnum.WECHAT_MP_ERROR.getCode(), e.getError().getErrorMsg());
+        }
+        log.info("wxMpOAuth2AccessToken={}", wxMpOAuth2AccessToken);
+        String openId = wxMpOAuth2AccessToken.getOpenId();
+
+        return "redirect:" + returnUrl + "?openid=" + openId;
+    }
+}
